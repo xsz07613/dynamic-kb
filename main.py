@@ -3,9 +3,11 @@ from bs4 import BeautifulSoup
 from sqlalchemy import create_engine, Column, Integer, String, Text
 from sqlalchemy.orm import sessionmaker, declarative_base
 from pydantic import BaseModel
+from apscheduler.schedulers.background import BackgroundScheduler
 import requests
 import hashlib
 import re
+
 
 # 数据库连接
 engine = create_engine("sqlite:///./knowledge.db", echo=False)
@@ -90,9 +92,24 @@ def parse_page(html):
 # FastAPI
 app = FastAPI()
 
-@app.get("/")
-async def say_ok():
-    return {"message": "ok"}
+scheduler = BackgroundScheduler()
+
+def crawl_onw():
+    urls = [
+        "https://www.baidu.com",
+        "https://example.com",
+    ]
+    for url in urls:
+        html = fetch_page(url)
+        if html.startswith("Error"):
+            continue
+        parsed = parse_page(html)
+        result = save_document(url, parsed["title"], parsed["content"])
+        print(f'[定时任务]{url} -> {result}')
+@app.on_event("startup")
+def start_scheduler():
+    scheduler.add_job(crawl_onw,'interval',minutes=10,id = "crawl_onw",max_instances=1)
+    scheduler.start()
 
 @app.get("/test-fetch")
 async def test_fetch():
